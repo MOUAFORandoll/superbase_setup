@@ -251,11 +251,17 @@ for i in {1..30}; do
 done
 
 # Exécution des migrations (dont 00_storage_schema_grants.sql) AVANT de démarrer Storage
+# 00_storage_schema_grants.sql doit être exécuté en superuser (supabase_admin) pour pouvoir changer le propriétaire du schéma storage
 if [[ -d "${SCRIPT_DIR}/migrations/init" ]]; then
   for f in "${SCRIPT_DIR}"/migrations/init/*.sql; do
     [[ -f "$f" ]] || continue
     echo "Application de $(basename "$f")..."
-    docker exec -i "${CONTAINER_NAME}" psql -U postgres -d postgres -f - < "$f" || true
+    if [[ "$(basename "$f")" == "00_storage_schema_grants.sql" ]]; then
+      docker exec -i -e PGPASSWORD=postgres "${CONTAINER_NAME}" psql -U supabase_admin -d postgres -f - < "$f" 2>/dev/null || \
+      docker exec -i "${CONTAINER_NAME}" psql -U postgres -d postgres -f - < "$f" || true
+    else
+      docker exec -i "${CONTAINER_NAME}" psql -U postgres -d postgres -f - < "$f" || true
+    fi
   done
 fi
 
