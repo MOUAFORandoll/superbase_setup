@@ -181,6 +181,18 @@ EOF
 
 mkdir -p "${SCRIPT_DIR}/migrations/init"
 
+# Droits sur le schéma storage pour que storage-api puisse créer sa table migrations
+if [[ ! -f "${SCRIPT_DIR}/migrations/init/00_storage_schema_grants.sql" ]]; then
+  cat > "${SCRIPT_DIR}/migrations/init/00_storage_schema_grants.sql" << 'SQLEOF'
+-- Schéma storage : droits pour l'utilisateur postgres (connexion utilisée par storage-api)
+CREATE SCHEMA IF NOT EXISTS storage;
+GRANT USAGE ON SCHEMA storage TO postgres;
+GRANT CREATE ON SCHEMA storage TO postgres;
+ALTER SCHEMA storage OWNER TO postgres;
+SQLEOF
+  echo "Fichier créé: migrations/init/00_storage_schema_grants.sql"
+fi
+
 # Génération des secrets JWT (création de .env si absent)
 if [[ ! -f "${ENV_FILE}" ]]; then
   generate_jwt_env
@@ -221,8 +233,9 @@ if [[ "$NO_START" == true ]]; then
   exit 0
 fi
 
-echo "Démarrage des containers..."
-(cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d)
+# Phase 1 : démarrer uniquement la base pour appliquer les droits storage avant le démarrage de Storage
+echo "Démarrage de PostgreSQL..."
+(cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d "${SERVICE_DB}")
 
 echo "Attente du démarrage de PostgreSQL..."
 for i in {1..30}; do
@@ -237,7 +250,7 @@ for i in {1..30}; do
   sleep 1
 done
 
-# Exécution des migrations personnalisées (migrations/init/*.sql)
+# Exécution des migrations (dont 00_storage_schema_grants.sql) AVANT de démarrer Storage
 if [[ -d "${SCRIPT_DIR}/migrations/init" ]]; then
   for f in "${SCRIPT_DIR}"/migrations/init/*.sql; do
     [[ -f "$f" ]] || continue
@@ -245,6 +258,10 @@ if [[ -d "${SCRIPT_DIR}/migrations/init" ]]; then
     docker exec -i "${CONTAINER_NAME}" psql -U postgres -d postgres -f - < "$f" || true
   done
 fi
+
+# Phase 2 : démarrer Storage (les droits sur le schéma storage sont déjà en place)
+echo "Démarrage du service Storage..."
+(cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d)
 
 echo ""
 echo "Supabase est initialisé."
