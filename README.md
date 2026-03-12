@@ -10,27 +10,28 @@ Initialisation de Supabase en local avec Docker : un script génère le `docker-
 ## Usage
 
 ```bash
-./init-supabase.sh --name <nom_projet> --port <port_postgres>
+./init-supabase.sh --name <nom_projet> --port <port_postgres> --storage-port <port_storage>
 ```
 
 **Exemples :**
 
 ```bash
-# Crée le container "monapp_superbase" sur le port 15432
-./init-supabase.sh --name monapp --port 15432
+# Crée le container "monapp_superbase", Postgres sur 15432, Storage sur 5040
+./init-supabase.sh --name monapp --port 15432 --storage-port 5040
 
 # Générer uniquement le docker-compose sans démarrer
-./init-supabase.sh --name monapp --port 15432 --no-start
+./init-supabase.sh --name monapp --port 15432 --storage-port 5040 --no-start
 ```
 
 - **`--name`** : nom du projet. Le container Postgres sera nommé `{name}_superbase`.
-- **`--port`** : port exposé pour PostgreSQL (ex. 15432). L’API Storage sera sur `port + 5000`.
+- **`--port`** : port exposé pour PostgreSQL (ex. 15432).
+- **`--storage-port`** : port exposé pour l’API Storage (ex. 5040).
 
 ## Après initialisation
 
 - **PostgreSQL** : `localhost:<port>` (user: `postgres`, password: `postgres`, db: `postgres`)
 - **Connection string** : `postgres://postgres:postgres@localhost:<port>/postgres`
-- **Storage API** : `http://localhost:<port+5000>`
+- **Storage API** : `http://localhost:<storage-port>`
 
 L’image `supabase/postgres` applique au premier démarrage le schéma par défaut Supabase (extensions, rôles `anon`/`authenticated`/`service_role`, etc.).
 

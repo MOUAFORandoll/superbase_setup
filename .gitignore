@@ -1,0 +1,5 @@
+# Ne garder que init-supabase.sh et README.md
+*
+!.gitignore
+!init-supabase.sh
+!README.md
