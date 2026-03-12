@@ -212,12 +212,12 @@ services:
     environment:
       KONG_DATABASE: off
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
-      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_PROXY_LISTEN: 0.0.0.0:3030
     depends_on:
       ${SERVICE_STORAGE}:
         condition: service_started
     ports:
-      - "8000:8000"
+      - "3030:3030"
     volumes:
       - ./kong:/usr/local/kong/declarative:ro
 
@@ -308,7 +308,7 @@ echo "Supabase est initialisé."
 echo "  Postgres : localhost:${PORT} (user: postgres, password: postgres, db: postgres)"
 echo "  Storage  : http://localhost:${STORAGE_PORT}"
 echo "  Connection string: postgres://postgres:postgres@localhost:${PORT}/postgres"
-echo "  Kong proxy : http://localhost:8000 (Storage: /storage/v1/...)"
+echo "  Kong proxy : http://localhost:3030 (Storage: /storage/v1/...)"
 if [[ -n "${SERVICE_KEY_VALUE:-}" ]]; then
   echo "  SERVICE_KEY : ${SERVICE_KEY_VALUE}"
 fi
