@@ -54,6 +54,16 @@ docker compose down
 docker compose logs -f
 ```
 
+## Secrets JWT
+
+Lors du premier lancement, le script **génère automatiquement** un fichier `.env` avec :
+
+- **PGRST_JWT_SECRET** : secret aléatoire (openssl)
+- **ANON_KEY** : JWT pour le rôle `anon`
+- **SERVICE_KEY** : JWT pour le rôle `service_role`
+
+Le `.env` est créé uniquement s’il n’existe pas. Pour régénérer les secrets, supprimez `.env` puis relancez le script. **Ne commitez pas le fichier `.env`** (il est ignoré par le `.gitignore` si vous ne versionnez que le script et le README).
+
 ## Sécurité
 
-En production, définir des secrets (`.env`) : `POSTGRES_PASSWORD`, `ANON_KEY`, `SERVICE_KEY`, etc. Voir la [doc Supabase self-hosting](https://supabase.com/docs/guides/self-hosting/docker).
+En production, vérifiez les secrets dans `.env` et définissez aussi `POSTGRES_PASSWORD` si besoin. Voir la [doc Supabase self-hosting](https://supabase.com/docs/guides/self-hosting/docker).

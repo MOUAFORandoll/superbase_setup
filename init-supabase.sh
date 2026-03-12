@@ -81,6 +81,45 @@ SERVICE_DB="${NAME}-db"
 SERVICE_STORAGE="${NAME}-storage"
 VOLUME_DB="${NAME}_db_data"
 VOLUME_STORAGE="${NAME}_storage_data"
+ENV_FILE="${SCRIPT_DIR}/.env"
+
+# Génère un JWT signé avec HS256 (payload JSON: iss, role, exp)
+# Usage: jwt_sign "<payload_json>" "<secret>"
+jwt_sign() {
+  local payload="$1"
+  local secret="$2"
+  local header='{"alg":"HS256","typ":"JWT"}'
+  base64_url() { base64 2>/dev/null | tr -d '\n' | tr '+/' '-_' | tr -d '='; }
+  local header_b64 payload_b64 msg sig
+  header_b64=$(echo -n "$header" | base64_url)
+  payload_b64=$(echo -n "$payload" | base64_url)
+  msg="${header_b64}.${payload_b64}"
+  sig=$(echo -n "$msg" | openssl dgst -sha256 -hmac "$secret" -binary | base64_url)
+  echo "${msg}.${sig}"
+}
+
+# Génère PGRST_JWT_SECRET, ANON_KEY, SERVICE_KEY et écrit .env
+generate_jwt_env() {
+  local secret
+  secret=$(openssl rand -base64 48 | tr -d '\n')
+  # Expiration lointaine (2038)
+  local exp="2147483646"
+  local anon_payload="{\"iss\":\"supabase\",\"role\":\"anon\",\"exp\":${exp}}"
+  local service_payload="{\"iss\":\"supabase\",\"role\":\"service_role\",\"exp\":${exp}}"
+  local anon_key service_key
+  anon_key=$(jwt_sign "$anon_payload" "$secret")
+  service_key=$(jwt_sign "$service_payload" "$secret")
+
+  cat > "${ENV_FILE}" << ENVEOF
+# Généré par init-supabase.sh - $(date -Iseconds)
+# Ne pas commiter ce fichier (secrets).
+
+PGRST_JWT_SECRET=${secret}
+ANON_KEY=${anon_key}
+SERVICE_KEY=${service_key}
+ENVEOF
+  echo "Secrets générés et écrits dans: ${ENV_FILE}"
+}
 
 echo "Configuration:"
 echo "  Container DB : ${CONTAINER_NAME}"
@@ -142,6 +181,13 @@ EOF
 
 mkdir -p "${SCRIPT_DIR}/migrations/init"
 
+# Génération des secrets JWT (création de .env si absent)
+if [[ ! -f "${ENV_FILE}" ]]; then
+  generate_jwt_env
+else
+  echo "Fichier .env existant conservé (supprimez-le pour régénérer les secrets)."
+fi
+
 # Fichier SQL d'init optionnel (exécuté au premier démarrage si présent)
 if [[ ! -f "${SCRIPT_DIR}/migrations/init/01_custom_schema.sql" ]]; then
   cat > "${SCRIPT_DIR}/migrations/init/01_custom_schema.sql" << 'SQLEOF'
@@ -176,7 +222,7 @@ if [[ "$NO_START" == true ]]; then
 fi
 
 echo "Démarrage des containers..."
-docker compose -f "${COMPOSE_FILE}" up -d
+(cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d)
 
 echo "Attente du démarrage de PostgreSQL..."
 for i in {1..30}; do
