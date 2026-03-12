@@ -82,6 +82,7 @@ SERVICE_STORAGE="${NAME}-storage"
 VOLUME_DB="${NAME}_db_data"
 VOLUME_STORAGE="${NAME}_storage_data"
 ENV_FILE="${SCRIPT_DIR}/.env"
+KONG_DIR="${SCRIPT_DIR}/kong"
 
 # Génère un JWT signé avec HS256 (payload JSON: iss, role, exp)
 # Usage: jwt_sign "<payload_json>" "<secret>"
@@ -121,6 +122,14 @@ ENVEOF
   echo "Secrets générés et écrits dans: ${ENV_FILE}"
 }
 
+# Lit une variable depuis le .env généré
+get_env_var() {
+  local key="$1"
+  if [[ -f "${ENV_FILE}" ]]; then
+    grep -E "^${key}=" "${ENV_FILE}" | sed -E "s/^${key}=//" | head -n1 || true
+  fi
+}
+
 echo "Configuration:"
 echo "  Container DB : ${CONTAINER_NAME}"
 echo "  Port Postgres : ${PORT}"
@@ -136,7 +145,21 @@ fi
 # Nettoyage des fichiers générés précédemment (réécrits à chaque run)
 rm -f "${COMPOSE_FILE}"
 
-# Génération du docker-compose
+# Génération des fichiers de configuration (Kong + docker-compose)
+generate_kong_config() {
+  mkdir -p "${KONG_DIR}"
+  cat > "${KONG_DIR}/kong.yml" << EOF
+_format_version: "3.0"
+services:
+  - name: storage-service
+    url: http://${SERVICE_STORAGE}:5000
+    routes:
+      - name: storage-route
+        paths:
+          - /storage/v1
+EOF
+}
+
 generate_compose() {
   cat << EOF
 # Généré par init-supabase.sh - $(date -Iseconds)
@@ -182,6 +205,22 @@ services:
     ports:
       - "${STORAGE_PORT}:5000"
 
+  kong:
+    image: kong:3.7
+    container_name: ${NAME}_superbase_kong
+    restart: always
+    environment:
+      KONG_DATABASE: off
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+    depends_on:
+      ${SERVICE_STORAGE}:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./kong:/usr/local/kong/declarative:ro
+
 volumes:
   ${VOLUME_DB}:
   ${VOLUME_STORAGE}:
@@ -196,6 +235,10 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 else
   echo "Fichier .env existant conservé (supprimez-le pour régénérer les secrets)."
 fi
+
+SERVICE_KEY_VALUE="$(get_env_var "SERVICE_KEY")"
+
+generate_kong_config
 
 # Fichier SQL d'init optionnel (exécuté au premier démarrage si présent)
 if [[ ! -f "${SCRIPT_DIR}/migrations/init/01_custom_schema.sql" ]]; then
@@ -265,6 +308,10 @@ echo "Supabase est initialisé."
 echo "  Postgres : localhost:${PORT} (user: postgres, password: postgres, db: postgres)"
 echo "  Storage  : http://localhost:${STORAGE_PORT}"
 echo "  Connection string: postgres://postgres:postgres@localhost:${PORT}/postgres"
+echo "  Kong proxy : http://localhost:8000 (Storage: /storage/v1/...)"
+if [[ -n "${SERVICE_KEY_VALUE:-}" ]]; then
+  echo "  SERVICE_KEY : ${SERVICE_KEY_VALUE}"
+fi
 echo ""
 echo "Pour arrêter: docker compose -f ${COMPOSE_FILE} down"
 echo "Pour les logs: docker compose -f ${COMPOSE_FILE} logs -f"

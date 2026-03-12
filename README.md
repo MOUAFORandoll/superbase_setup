@@ -32,6 +32,7 @@ Initialisation de Supabase en local avec Docker : un script génère le `docker-
 - **PostgreSQL** : `localhost:<port>` (user: `postgres`, password: `postgres`, db: `postgres`)
 - **Connection string** : `postgres://postgres:postgres@localhost:<port>/postgres`
 - **Storage API** : `http://localhost:<storage-port>`
+- **SERVICE_KEY** : affiché à la fin du script (également présent dans `.env`)
 
 L’image `supabase/postgres` applique au premier démarrage le schéma par défaut Supabase (extensions, rôles `anon`/`authenticated`/`service_role`, etc.).
 
@@ -63,6 +64,28 @@ Lors du premier lancement, le script **génère automatiquement** un fichier `.e
 - **SERVICE_KEY** : JWT pour le rôle `service_role`
 
 Le `.env` est créé uniquement s’il n’existe pas. Pour régénérer les secrets, supprimez `.env` puis relancez le script. **Ne commitez pas le fichier `.env`** (il est ignoré par le `.gitignore` si vous ne versionnez que le script et le README).
+
+## Exemple : créer un bucket Storage
+
+Avec la stack légère (sans gateway Kong), l’API Storage est directement exposée sur `http://localhost:<storage-port>`.
+
+Exemple pour créer un bucket `avatars` public :
+
+```bash
+SERVICE_KEY="<la_valeur_affichée_par_le_script>"
+
+curl -X POST "http://localhost:<storage-port>/bucket" \
+  -H "Authorization: Bearer ${SERVICE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "avatars",
+    "public": true,
+    "allowedMimeTypes": ["image/*"],
+    "fileSizeLimit": "1048576"
+  }'
+```
+
+Remplacez `<storage-port>` par le port choisi (ex. `5040`) et `SERVICE_KEY` par la valeur affichée à la fin de `init-supabase.sh`.
 
 ## Sécurité
 
