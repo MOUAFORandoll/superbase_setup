@@ -135,7 +135,6 @@ fi
 
 # Nettoyage des fichiers générés précédemment (réécrits à chaque run)
 rm -f "${COMPOSE_FILE}"
-rm -f "${SCRIPT_DIR}/migrations/init/00_storage_schema_grants.sql"
 
 # Génération du docker-compose
 generate_compose() {
@@ -190,14 +189,6 @@ EOF
 }
 
 mkdir -p "${SCRIPT_DIR}/migrations/init"
-
-# Droits sur le schéma storage pour que storage-api puisse créer sa table migrations (recréé à chaque run après nettoyage)
-cat > "${SCRIPT_DIR}/migrations/init/00_storage_schema_grants.sql" << 'SQLEOF'
--- Schéma storage : droits pour l'utilisateur postgres (connexion utilisée par storage-api)
-CREATE SCHEMA IF NOT EXISTS storage;
-GRANT USAGE ON SCHEMA storage TO postgres;
-GRANT CREATE ON SCHEMA storage TO postgres;
-SQLEOF
 
 # Génération des secrets JWT (création de .env si absent)
 if [[ ! -f "${ENV_FILE}" ]]; then
@@ -256,23 +247,17 @@ for i in {1..30}; do
   sleep 1
 done
 
-# Exécution des migrations (dont 00_storage_schema_grants.sql) AVANT de démarrer Storage
-# 00_storage_schema_grants.sql doit être exécuté en superuser (supabase_admin) pour pouvoir changer le propriétaire du schéma storage
+# Exécution des migrations personnalisées AVANT de démarrer Storage
 if [[ -d "${SCRIPT_DIR}/migrations/init" ]]; then
   for f in "${SCRIPT_DIR}"/migrations/init/*.sql; do
     [[ -f "$f" ]] || continue
     echo "Application de $(basename "$f")..."
-    if [[ "$(basename "$f")" == "00_storage_schema_grants.sql" ]]; then
-      docker exec -i -e PGPASSWORD=postgres "${CONTAINER_NAME}" psql -U supabase_admin -d postgres -f - < "$f" 2>/dev/null || \
-      docker exec -i "${CONTAINER_NAME}" psql -U postgres -d postgres -f - < "$f" || true
-    else
-      docker exec -i "${CONTAINER_NAME}" psql -U postgres -d postgres -f - < "$f" || true
-    fi
+    docker exec -i "${CONTAINER_NAME}" psql -q -U postgres -d postgres -f - < "$f" >/dev/null 2>&1 || true
   done
 fi
 
-# Phase 2 : démarrer Storage (les droits sur le schéma storage sont déjà en place)
-echo "Démarrage du service Storage..."
+# Phase 2 : démarrer Storage (les migrations personnalisées sont déjà appliquées)
+echo "Démarrage des services (DB + Storage)..."
 (cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d)
 
 echo ""
