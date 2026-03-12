@@ -3,7 +3,7 @@ set -euo pipefail
 
 # =============================================================================
 # Script d'initialisation Supabase avec Docker
-# Usage: ./init-supabase.sh --name <name> --port <port>
+# Usage: ./init-supabase.sh --name <name> --port <port> --storage-port <port>
 # Crée le container au format <name>_superbase et initialise les tables par défaut
 # =============================================================================
 
@@ -11,19 +11,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
 
 usage() {
-  echo "Usage: $0 --name <name> --port <port> [--no-start]"
+  echo "Usage: $0 --name <name> --port <port> --storage-port <port> [--no-start]"
   echo ""
   echo "Options:"
-  echo "  --name     Nom du projet (utilisé pour le container: <name>_superbase)"
-  echo "  --port     Port exposé pour PostgreSQL (ex: 5432)"
-  echo "  --no-start Génère uniquement le docker-compose sans lancer les containers"
+  echo "  --name         Nom du projet (utilisé pour le container: <name>_superbase)"
+  echo "  --port         Port exposé pour PostgreSQL (ex: 5432)"
+  echo "  --storage-port Port exposé pour l'API Storage (ex: 5000)"
+  echo "  --no-start     Génère uniquement le docker-compose sans lancer les containers"
   echo ""
-  echo "Exemple: $0 --name monapp --port 15432"
+  echo "Exemple: $0 --name monapp --port 15432 --storage-port 5040"
   exit 1
 }
 
 NAME=""
 PORT=""
+STORAGE_PORT=""
 NO_START=false
 
 while [[ $# -gt 0 ]]; do
@@ -34,6 +36,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --port)
       PORT="$2"
+      shift 2
+      ;;
+    --storage-port)
+      STORAGE_PORT="$2"
       shift 2
       ;;
     --no-start)
@@ -50,8 +56,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$NAME" ]] || [[ -z "$PORT" ]]; then
-  echo "Erreur: --name et --port sont requis."
+if [[ -z "$NAME" ]] || [[ -z "$PORT" ]] || [[ -z "$STORAGE_PORT" ]]; then
+  echo "Erreur: --name, --port et --storage-port sont requis."
   usage
 fi
 
@@ -61,19 +67,20 @@ if ! [[ "$NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
-# Validation: port numérique
-if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [[ "$PORT" -lt 1 ]] || [[ "$PORT" -gt 65535 ]]; then
-  echo "Erreur: le port doit être un nombre entre 1 et 65535."
-  exit 1
-fi
+# Validation: ports numériques
+for p in PORT STORAGE_PORT; do
+  val="${!p}"
+  if ! [[ "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]] || [[ "$val" -gt 65535 ]]; then
+    echo "Erreur: $p ($val) doit être un nombre entre 1 et 65535."
+    exit 1
+  fi
+done
 
 CONTAINER_NAME="${NAME}_superbase"
 SERVICE_DB="${NAME}-db"
 SERVICE_STORAGE="${NAME}-storage"
 VOLUME_DB="${NAME}_db_data"
 VOLUME_STORAGE="${NAME}_storage_data"
-# Port pour l'API Storage (éviter conflits si plusieurs instances)
-STORAGE_PORT=$((PORT + 5000))
 
 echo "Configuration:"
 echo "  Container DB : ${CONTAINER_NAME}"
@@ -85,7 +92,7 @@ echo ""
 generate_compose() {
   cat << EOF
 # Généré par init-supabase.sh - $(date -Iseconds)
-# name=${NAME} port=${PORT}
+# name=${NAME} port=${PORT} storage-port=${STORAGE_PORT}
 
 version: "3.9"
 
