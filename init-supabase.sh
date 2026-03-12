@@ -127,6 +127,16 @@ echo "  Port Postgres : ${PORT}"
 echo "  Port Storage : ${STORAGE_PORT}"
 echo ""
 
+# Arrêt et suppression de l'ancienne stack pour ce projet (containers + volumes définis dans le compose)
+if [[ -f "${COMPOSE_FILE}" ]]; then
+  echo "Nettoyage de l'ancienne stack Docker (down -v)..."
+  (cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" down -v 2>/dev/null || true)
+fi
+
+# Nettoyage des fichiers générés précédemment (réécrits à chaque run)
+rm -f "${COMPOSE_FILE}"
+rm -f "${SCRIPT_DIR}/migrations/init/00_storage_schema_grants.sql"
+
 # Génération du docker-compose
 generate_compose() {
   cat << EOF
@@ -181,17 +191,13 @@ EOF
 
 mkdir -p "${SCRIPT_DIR}/migrations/init"
 
-# Droits sur le schéma storage pour que storage-api puisse créer sa table migrations
-if [[ ! -f "${SCRIPT_DIR}/migrations/init/00_storage_schema_grants.sql" ]]; then
-  cat > "${SCRIPT_DIR}/migrations/init/00_storage_schema_grants.sql" << 'SQLEOF'
+# Droits sur le schéma storage pour que storage-api puisse créer sa table migrations (recréé à chaque run après nettoyage)
+cat > "${SCRIPT_DIR}/migrations/init/00_storage_schema_grants.sql" << 'SQLEOF'
 -- Schéma storage : droits pour l'utilisateur postgres (connexion utilisée par storage-api)
 CREATE SCHEMA IF NOT EXISTS storage;
 GRANT USAGE ON SCHEMA storage TO postgres;
 GRANT CREATE ON SCHEMA storage TO postgres;
-ALTER SCHEMA storage OWNER TO postgres;
 SQLEOF
-  echo "Fichier créé: migrations/init/00_storage_schema_grants.sql"
-fi
 
 # Génération des secrets JWT (création de .env si absent)
 if [[ ! -f "${ENV_FILE}" ]]; then
