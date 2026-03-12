@@ -94,11 +94,9 @@ generate_compose() {
 # Généré par init-supabase.sh - $(date -Iseconds)
 # name=${NAME} port=${PORT} storage-port=${STORAGE_PORT}
 
-version: "3.9"
-
 services:
   ${SERVICE_DB}:
-    image: supabase/postgres:15.1.0
+    image: supabase/postgres:15.14.1.096
     container_name: ${CONTAINER_NAME}
     restart: always
     environment:
