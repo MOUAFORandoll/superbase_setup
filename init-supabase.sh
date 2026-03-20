@@ -288,7 +288,7 @@ fi
 
 # Phase 1 : démarrer uniquement la base pour appliquer les droits storage avant le démarrage de Storage
 echo "Démarrage de PostgreSQL..."
-(cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d "${SERVICE_DB}")
+(cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans "${SERVICE_DB}")
 
 echo "Attente du démarrage de PostgreSQL..."
 for i in {1..30}; do
@@ -314,7 +314,7 @@ fi
 
 # Phase 2 : démarrer Storage (les migrations personnalisées sont déjà appliquées)
 echo "Démarrage des services (DB + Storage)..."
-(cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d)
+(cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans)
 
 echo ""
 echo "Supabase est initialisé."
