@@ -83,6 +83,8 @@ VOLUME_DB="${NAME}_db_data"
 VOLUME_STORAGE="${NAME}_storage_data"
 ENV_FILE="${SCRIPT_DIR}/.env"
 KONG_DIR="${SCRIPT_DIR}/kong"
+STORAGE_CONTAINER="${NAME}_superbase_storage"
+KONG_CONTAINER="${NAME}_superbase_kong"
 
 # Génère un JWT signé avec HS256 (payload JSON: iss, role, exp)
 # Usage: jwt_sign "<payload_json>" "<secret>"
@@ -136,10 +138,12 @@ echo "  Port Postgres : ${PORT}"
 echo "  Port Storage : ${STORAGE_PORT}"
 echo ""
 
-# Arrêt et suppression de l'ancienne stack pour ce projet (containers + volumes définis dans le compose)
+# Nettoyage : détruire tous les containers générés pour ce projet (DB + Storage + Kong)
 if [[ -f "${COMPOSE_FILE}" ]]; then
-  echo "Nettoyage de l'ancienne stack Docker (down -v)..."
-  (cd "${SCRIPT_DIR}" && docker compose -f "${COMPOSE_FILE}" down -v 2>/dev/null || true)
+  echo "Nettoyage: destruction des containers liés au projet '${NAME}'..."
+  docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+  docker rm -f "${STORAGE_CONTAINER}" >/dev/null 2>&1 || true
+  docker rm -f "${KONG_CONTAINER}" >/dev/null 2>&1 || true
 fi
 
 # Nettoyage des fichiers générés précédemment (réécrits à chaque run)
