@@ -10,7 +10,7 @@ Initialisation de Supabase en local avec Docker : un script génère le `docker-
 ## Usage
 
 ```bash
-./init-supabase.sh --name <nom_projet> --port <port_postgres> --storage-port <port_storage>
+./init-supabase.sh --name <nom_projet> --port <port_postgres> --storage-port <port_storage> --kong-port <port_kong>
 ```
 
 **Exemples :**
@@ -19,6 +19,9 @@ Initialisation de Supabase en local avec Docker : un script génère le `docker-
 # Crée le container "monapp_superbase", Postgres sur 15432, Storage sur 5040
 ./init-supabase.sh --name monapp --port 15432 --storage-port 5040
 
+# (Optionnel) Kong sur un port différent
+./init-supabase.sh --name monapp --port 15432 --storage-port 5040 --kong-port 3030
+
 # Générer uniquement le docker-compose sans démarrer
 ./init-supabase.sh --name monapp --port 15432 --storage-port 5040 --no-start
 ```
@@ -26,12 +29,14 @@ Initialisation de Supabase en local avec Docker : un script génère le `docker-
 - **`--name`** : nom du projet. Le container Postgres sera nommé `{name}_superbase`.
 - **`--port`** : port exposé pour PostgreSQL (ex. 15432).
 - **`--storage-port`** : port exposé pour l’API Storage (ex. 5040).
+- **`--kong-port`** : port exposé pour Kong (ex. 3030).
 
 ## Après initialisation
 
 - **PostgreSQL** : `localhost:<port>` (user: `postgres`, password: `postgres`, db: `postgres`)
 - **Connection string** : `postgres://postgres:postgres@localhost:<port>/postgres`
-- **Storage API** : `http://localhost:<storage-port>`
+- **Storage API (direct)** : `http://localhost:<storage-port>`
+- **Storage API (via Kong)** : `http://localhost:<kong-port>/storage/v1`
 - **SERVICE_KEY** : affiché à la fin du script (également présent dans `.env`)
 
 L’image `supabase/postgres` applique au premier démarrage le schéma par défaut Supabase (extensions, rôles `anon`/`authenticated`/`service_role`, etc.).
@@ -67,14 +72,14 @@ Le `.env` est créé uniquement s’il n’existe pas. Pour régénérer les sec
 
 ## Exemple : créer un bucket Storage
 
-Avec la stack légère (sans gateway Kong), l’API Storage est directement exposée sur `http://localhost:<storage-port>`.
+Avec Kong, l’API Storage est accessible via `http://localhost:<kong-port>/storage/v1`.
 
 Exemple pour créer un bucket `avatars` public :
 
 ```bash
 SERVICE_KEY="<la_valeur_affichée_par_le_script>"
 
-curl -X POST "http://localhost:<storage-port>/bucket" \
+curl -X POST "http://localhost:<kong-port>/storage/v1/bucket" \
   -H "Authorization: Bearer ${SERVICE_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -85,7 +90,7 @@ curl -X POST "http://localhost:<storage-port>/bucket" \
   }'
 ```
 
-Remplacez `<storage-port>` par le port choisi (ex. `5040`) et `SERVICE_KEY` par la valeur affichée à la fin de `init-supabase.sh`.
+Vous pouvez aussi appeler directement `http://localhost:<storage-port>/bucket`, mais le plus simple est d’utiliser Kong.
 
 ## Sécurité
 

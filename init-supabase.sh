@@ -3,7 +3,7 @@ set -euo pipefail
 
 # =============================================================================
 # Script d'initialisation Supabase avec Docker
-# Usage: ./init-supabase.sh --name <name> --port <port> --storage-port <port>
+# Usage: ./init-supabase.sh --name <name> --port <port> --storage-port <port> --kong-port <port>
 # Crée le container au format <name>_superbase et initialise les tables par défaut
 # =============================================================================
 
@@ -11,21 +11,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
 
 usage() {
-  echo "Usage: $0 --name <name> --port <port> --storage-port <port> [--no-start]"
+  echo "Usage: $0 --name <name> --port <port> --storage-port <port> --kong-port <port> [--no-start]"
   echo ""
   echo "Options:"
   echo "  --name         Nom du projet (utilisé pour le container: <name>_superbase)"
   echo "  --port         Port exposé pour PostgreSQL (ex: 5432)"
   echo "  --storage-port Port exposé pour l'API Storage (ex: 5000)"
+  echo "  --kong-port    Port exposé pour Kong (ex: 3030)"
   echo "  --no-start     Génère uniquement le docker-compose sans lancer les containers"
   echo ""
-  echo "Exemple: $0 --name monapp --port 15432 --storage-port 5040"
+  echo "Exemple: $0 --name monapp --port 15432 --storage-port 5040 --kong-port 3030"
   exit 1
 }
 
 NAME=""
 PORT=""
 STORAGE_PORT=""
+KONG_PORT="3030"
 NO_START=false
 
 while [[ $# -gt 0 ]]; do
@@ -40,6 +42,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --storage-port)
       STORAGE_PORT="$2"
+      shift 2
+      ;;
+    --kong-port)
+      KONG_PORT="$2"
       shift 2
       ;;
     --no-start)
@@ -68,7 +74,7 @@ if ! [[ "$NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
 fi
 
 # Validation: ports numériques
-for p in PORT STORAGE_PORT; do
+for p in PORT STORAGE_PORT KONG_PORT; do
   val="${!p}"
   if ! [[ "$val" =~ ^[0-9]+$ ]] || [[ "$val" -lt 1 ]] || [[ "$val" -gt 65535 ]]; then
     echo "Erreur: $p ($val) doit être un nombre entre 1 et 65535."
@@ -136,6 +142,7 @@ echo "Configuration:"
 echo "  Container DB : ${CONTAINER_NAME}"
 echo "  Port Postgres : ${PORT}"
 echo "  Port Storage : ${STORAGE_PORT}"
+echo "  Port Kong : ${KONG_PORT}"
 echo ""
 
 # Nettoyage : détruire tous les containers générés pour ce projet (DB + Storage + Kong)
@@ -161,6 +168,8 @@ services:
       - name: storage-route
         paths:
           - /storage/v1
+          - /storage/v1/
+        strip_path: true
 EOF
 }
 
@@ -216,12 +225,12 @@ services:
     environment:
       KONG_DATABASE: off
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
-      KONG_PROXY_LISTEN: 0.0.0.0:3030
+      KONG_PROXY_LISTEN: 0.0.0.0:${KONG_PORT}
     depends_on:
       ${SERVICE_STORAGE}:
         condition: service_started
     ports:
-      - "3030:3030"
+      - "${KONG_PORT}:${KONG_PORT}"
     volumes:
       - ./kong:/usr/local/kong/declarative:ro
 
@@ -312,7 +321,7 @@ echo "Supabase est initialisé."
 echo "  Postgres : localhost:${PORT} (user: postgres, password: postgres, db: postgres)"
 echo "  Storage  : http://localhost:${STORAGE_PORT}"
 echo "  Connection string: postgres://postgres:postgres@localhost:${PORT}/postgres"
-echo "  Kong proxy : http://localhost:3030 (Storage: /storage/v1/...)"
+echo "  Kong proxy : http://localhost:${KONG_PORT} (Storage: /storage/v1/...)"
 if [[ -n "${SERVICE_KEY_VALUE:-}" ]]; then
   echo "  SERVICE_KEY : ${SERVICE_KEY_VALUE}"
 fi
